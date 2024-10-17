@@ -1,51 +1,38 @@
-provider "google" {
-  project = var.project_id
-  region  = var.region
-}
-
 resource "google_compute_network" "vpc_network" {
-  name = "load-test-vpc"
+  name = "loadtest-network"
 }
 
-resource "google_compute_subnetwork" "public_subnet" {
-  name          = "public-subnet"
-  network       = google_compute_network.vpc_network.name
-  ip_cidr_range = "10.0.1.0/24"
+resource "google_compute_subnetwork" "subnetwork" {
+  name          = "loadtest-subnet"
   region        = var.region
-}
-
-resource "google_compute_subnetwork" "private_subnet" {
-  name          = "private-subnet"
-  network       = google_compute_network.vpc_network.name
-  ip_cidr_range = "10.0.2.0/24"
-  region        = var.region
+  network       = google_compute_network.vpc_network.self_link
+  ip_cidr_range = "10.0.0.0/16"
 }
 
 resource "google_compute_instance" "loadtest_instance" {
   count         = var.instance_count
-  name          = "loadtest-instance-${count.index}"
+  name          = "k6-loadtest-instance-${count.index + 1}"
   machine_type  = "e2-medium"
-  zone          = element(var.zones, count.index % length(var.zones))
-  tags          = ["loadtest"]
-  
+  zone          = "${var.region}-a"
+  tags          = ["http-server"]
+
   boot_disk {
     initialize_params {
-      image = "debian-cloud/debian-11"
+      image = "ubuntu-os-cloud/ubuntu-2004-lts"
     }
   }
 
   network_interface {
-    subnetwork = google_compute_subnetwork.public_subnet.name
-    access_config {}  # Assigns a public IP
+    network    = google_compute_network.vpc_network.self_link
+    subnetwork = google_compute_subnetwork.subnetwork.self_link
+    access_config {
+      // Ephemeral public IP
+    }
   }
 
   metadata_startup_script = <<-EOT
-    #! /bin/bash
+    #!/bin/bash
     sudo apt-get update
-    sudo apt-get install -y ansible
+    sudo apt-get install -y k6
   EOT
-}
-
-output "instance_ips" {
-  value = google_compute_instance.loadtest_instance[*].network_interface[0].access_config[0].nat_ip
 }
