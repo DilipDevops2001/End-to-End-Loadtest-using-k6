@@ -1,0 +1,3 @@
+[loadtest_nodes]
+<ec2-instance-public-ip-1>
+<ec2-instance-public-ip-2>
